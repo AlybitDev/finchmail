@@ -1,0 +1,62 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: ${DATABASE_URL}
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY}
+      INITIAL_SETUP_TOKEN: ${INITIAL_SETUP_TOKEN}
+      ALLOW_PRIVATE_MAIL_HOSTS: ${ALLOW_PRIVATE_MAIL_HOSTS:-false}
+      SESSION_COOKIE_DOMAIN: ${SESSION_COOKIE_DOMAIN:-}
+      ARGON2_MEMORY_COST: ${ARGON2_MEMORY_COST:-19456}
+    command: ["sh", "-c", "npx prisma migrate deploy && node server.js"]
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 45s
+
+  worker:
+    build: .
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 60s
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY}
+      INITIAL_SETUP_TOKEN: ${INITIAL_SETUP_TOKEN}
+      ALLOW_PRIVATE_MAIL_HOSTS: ${ALLOW_PRIVATE_MAIL_HOSTS:-false}
+    command: ["node", "node_modules/tsx/dist/cli.mjs", "scripts/sync-worker.ts"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-finchmail}
+      POSTGRES_USER: ${POSTGRES_USER:-finchmail}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - finchmail-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-finchmail} -d ${POSTGRES_DB:-finchmail}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  finchmail-db:

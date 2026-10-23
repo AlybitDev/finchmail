@@ -1,0 +1,132 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  isOwner      Boolean       @unique @default(true)
+  createdAt    DateTime      @default(now())
+  accounts     MailAccount[]
+  sessions     Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  keyHash   String
+  createdAt DateTime @default(now())
+
+  @@index([keyHash, createdAt])
+  @@index([createdAt])
+}
+
+model MailAccount {
+  id                 String    @id @default(cuid())
+  userId             String
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name               String
+  email              String
+  imapHost           String
+  imapPort           Int       @default(993)
+  imapSecure         Boolean   @default(true)
+  imapUsername       String
+  imapPasswordCipher String
+  smtpHost           String
+  smtpPort           Int       @default(465)
+  smtpSecure         Boolean   @default(true)
+  smtpUsername       String
+  smtpPasswordCipher String
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  mailboxes          Mailbox[]
+  syncRuns           SyncRun[]
+
+  @@unique([userId, email])
+  @@index([userId])
+}
+
+model Mailbox {
+  id                String      @id @default(cuid())
+  accountId         String
+  account           MailAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  name              String
+  path              String
+  specialUse        String?
+  role              String      @default("all")
+  uidValidity       BigInt?
+  highestUid        BigInt      @default(0)
+  backfillBeforeUid BigInt?
+  backfillComplete  Boolean     @default(false)
+  recentBeforeUid   BigInt      @default(0)
+  recentComplete    Boolean     @default(false)
+  syncedAt          DateTime?
+  lastFullReconcileAt DateTime?
+  messages          Message[]
+
+  @@unique([accountId, path])
+  @@index([accountId])
+  @@index([accountId, role])
+}
+
+model Message {
+  id                String    @id @default(cuid())
+  mailboxId         String
+  mailbox           Mailbox   @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  uid               BigInt
+  messageId         String?
+  inReplyTo         String?
+  references        String[]  @default([])
+  subject           String    @default("")
+  fromName          String    @default("")
+  fromAddress       String    @default("")
+  toAddresses       Json      @default("[]")
+  ccAddresses       Json      @default("[]")
+  sentAt            DateTime?
+  receivedAt        DateTime  @default(now())
+  textBody          String    @default("")
+  htmlBody          String    @default("")
+  isRead            Boolean   @default(false)
+  isStarred         Boolean   @default(false)
+  hasAttachments    Boolean   @default(false)
+  attachmentMeta    Json      @default("[]")
+  localReadOverride Boolean?
+  localStarOverride Boolean?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([mailboxId, uid])
+  @@index([mailboxId, receivedAt(sort: Desc)])
+  @@index([messageId])
+}
+
+model SyncRun {
+  id        String      @id @default(cuid())
+  accountId String
+  account   MailAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  status    String      @default("queued")
+  startedAt DateTime?
+  endedAt   DateTime?
+  error     String?
+  createdAt DateTime    @default(now())
+
+  @@index([accountId, createdAt(sort: Desc)])
+  @@index([status, createdAt])
+}

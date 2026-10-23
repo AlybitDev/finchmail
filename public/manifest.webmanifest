@@ -1,0 +1,10 @@
+{
+  "name": "Finchmail",
+  "short_name": "Finchmail",
+  "description": "A quieter inbox.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f7f4",
+  "theme_color": "#f7f7f4",
+  "icons": []
+}
